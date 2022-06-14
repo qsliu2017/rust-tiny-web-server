@@ -1,22 +1,51 @@
 use std::{
-    io::{Read, Write},
-    net,
+    io::{self, Read, Write},
+    net::{self, TcpStream},
+    thread::sleep,
+    time::Duration,
 };
 
 fn main() {
     let listener = net::TcpListener::bind("127.0.0.1:2017").unwrap();
-    match listener.accept() {
-        Ok((mut stream, addr)) => {
-            println!("Accept conn from {addr:?}");
-            let mut buf = [0; 1024];
+    listener.incoming().for_each(|stream| match stream {
+        Ok(mut stream) => handle_connection(&mut stream).unwrap(),
+        Err(e) => println!("{e:?}"),
+    });
+}
 
-            stream.read(&mut buf).unwrap_or_else(|e| panic!("{e}"));
-            println!("Got stream: {buf:?}");
+const CONTENT: &str = "<!DOCTYPE html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\">
+    <title>Hello!</title>
+  </head>
+  <body>
+    <h1>Hello!</h1>
+    <p>Hi from Rust</p>
+  </body>
+</html>
+";
 
-            write!(&mut stream, "HTTP/1.0 200 OK\r\n\r\nHello World\r\n")
-                .unwrap_or_else(|e| panic!("{e}"));
-            stream.flush().unwrap_or_else(|e| panic! {"{e}"});
-        }
-        Err(e) => panic!("{}", e),
-    }
+fn handle_connection(stream: &mut TcpStream) -> Result<(), io::Error> {
+    let mut buf = [0; 1024];
+
+    println!("Stream:");
+    stream.read(&mut buf).unwrap();
+    print!("{:?}", String::from_utf8_lossy(&buf));
+
+    heavy_job(stream);
+
+    stream.write(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            CONTENT.len(),
+            CONTENT
+        )
+        .as_bytes(),
+    )?;
+    stream.flush()
+}
+
+fn heavy_job(_: &mut TcpStream) {
+    sleep(Duration::from_secs(5))
 }
