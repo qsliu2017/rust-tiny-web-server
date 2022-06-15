@@ -1,16 +1,26 @@
 use std::{
-    io::{self, Read, Write},
+    io,
+    io::{Read, Write},
     net::{self, TcpStream},
     thread::sleep,
     time::Duration,
 };
 
+use rust_tiny_web_server::thread_pool::Pool;
+
 fn main() {
     let listener = net::TcpListener::bind("127.0.0.1:2017").unwrap();
-    listener.incoming().for_each(|stream| match stream {
-        Ok(mut stream) => handle_connection(&mut stream).unwrap(),
-        Err(e) => println!("{e:?}"),
-    });
+    let pool = Pool::new(5);
+    println!("Log:[Main] Listening");
+    for income in listener.incoming() {
+        match income {
+            Ok(mut stream) => pool.execute(move || {
+                handle_connection(&mut stream).unwrap();
+            }),
+            Err(e) => println!("{e}"),
+        };
+        println!("Log:[Main] Listening next");
+    }
 }
 
 const CONTENT: &str = "<!DOCTYPE html>
@@ -31,7 +41,7 @@ fn handle_connection(stream: &mut TcpStream) -> Result<(), io::Error> {
 
     println!("Stream:");
     stream.read(&mut buf).unwrap();
-    print!("{:?}", String::from_utf8_lossy(&buf));
+    // print!("{:?}", String::from_utf8_lossy(&buf));
 
     heavy_job(stream);
 
